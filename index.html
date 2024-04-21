@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zuyderland dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/d3-simple-slider"></script>
+<style>
+    body {
+        background-color: white;
+    }
+    .dot {
+        stroke: black;
+        opacity: 0.7;
+    }
+    
+
+
+    .tooltip {
+        position: absolute;
+        text-align: center;
+        padding: 4px;
+        font: 12px sans-serif;
+        background: lightsteelblue;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        pointer-events: none;
+    }
+    .gender-selection {
+    display: flex;
+    justify-content: flex-start;
+}
+.skinny-selection{
+    display: flex;
+    justify-content: flex-start;
+}
+
+input[type="radio"] {
+    display: none; 
+}
+
+label {
+    display: inline-block;
+    width: 100px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #286B86; 
+    text-align: center;
+    line-height: 60px;
+    cursor: pointer;
+}
+
+
+input[type="radio"]:checked + label {
+    background-color: #81CBF2; 
+}
+.details-container {
+    width: 1000px;
+    height: 200px;
+    
+    
+    padding: 2px;
+    margin-left: 20px; 
+}
+
+.container {
+        position: relative;
+    }
+
+
+    .slider-container {
+        margin-top: 40px; 
+    }
+
+    .slider-axis {
+        font-size: 10px;
+    }
+
+    .slider-axis text {
+        fill: #286B86;
+    }
+
+    .slider-axis line {
+        stroke: #286B86;
+    }
+
+    .slider-axis .track {
+        stroke: #286B86;
+        stroke-width: 3px;
+        pointer-events: stroke;
+        
+    }
+    .slider-axis .handle {
+    fill: darkblue;
+}
+
+.slider-axis .handle:active {
+    fill: navy; 
+}
+
+    .slider-axis .track-inset {
+        stroke: #ddd;
+        stroke-width: 2px;
+        pointer-events: stroke;
+    }
+
+    .slider-axis .track-overlay {
+        pointer-events: stroke;
+        stroke-width: 50px;
+        stroke: transparent;
+        cursor: pointer;
+    }
+
+    .slider-axis .handle {
+        fill: #fff;
+        stroke: #000;
+        stroke-opacity: 0.5;
+        stroke-width: 1.25px;
+        pointer-events: none;
+    }
+
+    .slider-axis .handle:active {
+        fill: #000;
+    }
+
+    .slider-axis .handle-hidden {
+        display: none;
+    }
+
+    .stats-container {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center; 
+        margin-top: 10px;
+    }
+
+    .stats-box {
+        width: 350px; 
+        height: 100px; 
+        padding: 10px;
+        border: 5px solid #286B86;
+        border-radius: 5px;
+        background-color: #81CBF2;
+        text-align: center;
+        margin: 10px; 
+    }
+    .bold {
+    font-weight: bold;
+    font-size: xx-large; 
+}
+
+
+
+</style>
+</head>
+<body>
+
+    <div class="stats-container">
+        <div class="stats-box" id="percentage-too-skinny"></div>
+        <div class="stats-box" id="percentage-gender"></div>
+        <div class="stats-box" id="average-age-too-skinny"></div>
+    </div>
+
+<div class = "gender-selection">
+    
+    <input type="radio" id="male" name="gender" value="male">
+    <label for="male">Man</label>
+    <input type="radio" id="female" name="gender" value="female">
+    <label for="female">Vrouw</label>
+    <input type="radio" id="both" name="gender" value="both" checked>
+    <label for="both">Alles</label>
+</div>
+
+<div class = "skinny-selection">
+    
+    <input type="radio" id="yes-skinny" name="too-skinny" value="yes">
+    <label for="yes-skinny">Ondervoeding</label>
+    <input type="radio" id="no-skinny" name="too-skinny" value="no">
+    <label for="no-skinny">Normaal</label>
+    <input type="radio" id="both-skinny" name="too-skinny" value="both" checked>
+    <label for="both-skinny">Beide</label>
+</div>
+
+<h3>BMI filter</h1>
+<div class="slider-container" id="bmi-slider"></div>
+<h3>SNAQ filter</h1>
+<div class="slider-container" id="snaq-slider"></div>
+
+<div class="tooltip" style="opacity: 0;"></div>
+
+<div class="details-container" id="details-container"></div>
+
+<script>
+// Load the JSON data
+d3.json("data.json").then(function(data) {
+
+    // Extract the necessary data
+    var totalPatients = data.length;
+    var totalSkinnyPatients = data.filter(d => d.too_skinny === "yes").length;
+    var totalMalePatients = data.filter(d => d.gender === "male").length;
+    var totalFemalePatients = data.filter(d => d.gender === "female").length;
+    var averageAgeTooSkinny = d3.mean(data.filter(d => d.too_skinny === "yes"), d => d.age);
+    var percentageSkinny = ((totalSkinnyPatients / totalPatients) * 100).toFixed(2);
+    var percentageSkinnyContent = "Percentage ondergewicht: " + '<span class="bold">' + percentageSkinny + "%</span>";
+    var malePercentage = ((totalMalePatients / totalPatients) * 100).toFixed(2);
+    var femalePercentage = ((totalFemalePatients / totalPatients) * 100).toFixed(2);
+    var genderPercentageContent = "Percentage geslacht: " +
+    '<span class="bold">' + malePercentage + "%</span> Man, " +
+    '<span class="bold">' + femalePercentage + "%</span> Vrouw";
+    var ageAverage = "Gemiddelde leeftijd ondergewicht:  " + '<span class="bold">' + averageAgeTooSkinny.toFixed(0) + '</span>';
+    // Display statistics
+    document.getElementById("percentage-too-skinny").innerHTML = percentageSkinnyContent;
+    document.getElementById("percentage-gender").innerHTML = genderPercentageContent;
+    document.getElementById("average-age-too-skinny").innerHTML = ageAverage;
+
+    // Extract the duration, age, gender, and BMI from each data point
+    var durations = data.map(function(d) { return d.duration; });
+    var ages = data.map(function(d) { return d.age; });
+    var genders = data.map(function(d) { return d.gender; });
+    var bmis = data.map(function(d) { return d.bmi; });
+    var snaqs = data.map(function(d) { return d.snaqscore; });
+    var skinnies = data.map(function(d) { return d.too_skinny; });
+
+    // Set up SVG dimensions
+    var margin = {top: 50, right: 20, bottom: 100, left: 50},
+        width = 600 - margin.left - margin.right,
+        height = 600 - margin.top - margin.bottom;
+
+    // Create SVG element
+    var svg = d3.select("body").append("svg")
+        .attr("width", 2 * width + margin.left + margin.right)
+        .attr("height", 600)
+        .append("g")
+        .attr("transform",
+              "translate(" + margin.left + "," + margin.top + ")");
+
+    // Define scales
+    var x = d3.scaleLinear()
+        .domain([0, d3.max(durations)])
+        .range([0, width]);
+
+    var y = d3.scaleLinear()
+        .domain([0, d3.max(ages)])
+        .range([height, 0]);
+
+    // Add circles for each data point
+    svg.selectAll(".dot")
+    .data(data)
+    .enter().append("circle")
+    .attr("class", "dot")
+    .attr("cx", function(d) { return x(d.duration); })
+    .attr("cy", function(d) { return y(d.age); })
+    .attr("r", 4)
+    .style("fill", function(d) {
+        return d.gender === "female" ? "red" : "blue";
+    })
+    .style("display", function(d) {
+       
+    })
+    .on("click", function(event, d) {
+      
+        var details = "<strong>BMI:</strong> " + d.bmi + "<br>" +
+                      "<strong>Duur:</strong> " + d.duration + "<br>" +
+                      "<strong>Leeftijd:</strong> " + d.age + "<br>" +
+                      "<strong>Geslacht:</strong> " + d.gender + "<br>" +
+                      "<strong>Snaq:</strong> " + d.snaqscore + "<br>" +
+                      "<strong>Ondervoeding:</strong> " + d.too_skinny;
+
+        document.getElementById("details-container").innerHTML = details;
+    })
+        .on("mouseover", function(event, d) {
+       
+            d3.select(".tooltip")
+                .style("opacity", 0.9)
+                .html("BMI: " + d.bmi)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 20) + "px");
+        })
+        .on("mouseout", function() {
+         
+            d3.select(".tooltip").style("opacity", 0);
+        });
+
+
+    svg.append("g")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x));
+
+ 
+    svg.append("g")
+        .call(d3.axisLeft(y));
+
+   
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "translate(" + (width / 2) + "," + (height + margin.top + 20) + ")")
+        .text("Ligduur");
+
+    svg.append("text")
+        .attr("text-anchor", "middle")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0 - margin.left)
+        .attr("x", 0 - (height / 2))
+        .attr("dy", "1em")
+        .text("Leeftijd");
+
+        var detailsContainer = d3.select("#details-container");
+
+// Function to update details container
+function updateDetails(data) {
+    // Clear previous content
+    detailsContainer.selectAll("*").remove();
+    
+    // Append SVG element to the details container
+    var svg = detailsContainer.append("svg")
+        .attr("width", 400)
+        .attr("height", 250);
+
+    svg.append("rect")
+        .attr("width", 230)
+        .attr("height", 20)
+        .attr("x", 100)
+        .attr("y", 140)
+        .attr("fill", "#66ff99");
+
+    svg.append("ellipse")
+        .attr("cx", 180)
+        .attr("cy", 155)
+        .attr("rx", 90)
+        .attr("ry", 30)
+        .attr("fill", "#66ff99")
+
+
+
+        var hairCoordinates = [
+        { cx: 80, cy: 160, r: 25 },
+        { cx: 80, cy: 150, r: 25 },
+        { cx: 80, cy: 120, r: 20 },
+        { cx: 60, cy: 127, r: 30 },
+        { cx: 75, cy: 120, r: 25 },
+        { cx: 71, cy: 120, r: 20 }
+    ];
+
+    hairCoordinates.forEach(function(coordinate) {
+        svg.append("circle")
+            .attr("cx", coordinate.cx)
+            .attr("cy", coordinate.cy)
+            .attr("r", coordinate.r)
+            .attr("fill", "brown");
+    });
+    if (data.gender === "male") {
+        svg.selectAll("circle").style("opacity", 0); 
+    }
+    svg.append("circle")
+        .attr("cx", 80)
+        .attr("cy", 140) 
+        .attr("r", 22) 
+        .style("fill", "#ffd9b3");
+
+   
+
+    svg.append("rect")
+        .attr("width", 400)
+        .attr("height", 20)
+        .attr("x", 0)
+        .attr("y", 190)
+        .attr("fill", "antracite");
+
+    svg.append("rect")
+        .attr("width", 20)
+        .attr("height", 100)
+        .attr("x", 0)
+        .attr("y", 90)
+        .attr("fill", "antracite");
+   
+    svg.append("rect")
+        .attr("width", 15)
+        .attr("height", 40)
+        .attr("x", 385)
+        .attr("y", 150)
+        .attr("fill", "antracite");    
+
+    svg.append("rect")
+        .attr("width", 20)
+        .attr("height", 20)
+        .attr("x", 20)
+        .attr("y", 210)
+        .attr("fill", "gray");
+
+    svg.append("rect")
+        .attr("width", 20)
+        .attr("height", 20)
+        .attr("x", 360)
+        .attr("y", 210)
+        .attr("fill", "gray");
+
+    svg.append("rect")
+        .attr("width", 10)
+        .attr("height", 100)
+        .attr("x", 30)
+        .attr("y", 50)
+        .attr("fill", "lightgray");
+
+    svg.append("rect")
+        .attr("width", 60)
+        .attr("height", 10)
+        .attr("x", 5)
+        .attr("y", 40)
+        .attr("fill", "lightgray");
+
+    svg.append("rect")
+        .attr("width", 20)
+        .attr("height", 30)
+        .attr("x", 330)
+        .attr("y", 130)
+        .attr("fill", "brown");
+
+    svg.append("circle")
+        .attr("cx", 340)
+        .attr("cy", 130) 
+        .attr("r", 10) 
+        .style("fill", "brown");
+
+    var genderBlanketColor = data.gender === "female" ? "#ff66cc" : "#33ccff";
+    svg.append("rect")
+        .attr("width", 365)
+        .attr("height", 30)
+        .attr("x", 20)
+        .attr("y", 160)
+        .attr("fill", genderBlanketColor);
+    var genderPillowColor = data.gender === "female" ? "purple" : "blue";
+    svg.append("rect")
+        .attr("width", 40)
+        .attr("height", 20)
+        .attr("x", 20)
+        .attr("y", 140)
+        .attr("fill", genderPillowColor);
+
+        svg.append("rect")
+        .attr("width", 40)
+        .attr("height", 70)
+        .attr("x", 330)
+        .attr("y", 20)
+        .attr("fill", "black");
+
+        svg.append("path")
+    .attr("d", "M 150 30 L 170 60") 
+    .attr("stroke", "black") 
+    .attr("stroke-width", 1) 
+    .attr("fill", "none");
+
+    svg.append("path")
+    .attr("d", "M 150 30 L 130 60") 
+    .attr("stroke", "black") 
+    .attr("stroke-width", 1) 
+    .attr("fill", "none");
+
+        svg.append("circle")
+        .attr("cx", 150)
+        .attr("cy", 30) 
+        .attr("r", 3) 
+        .style("fill", "black");
+
+        svg.append("circle")
+        .attr("cx", 60)
+        .attr("cy", 150) 
+        .attr("r", 10) 
+        .style("fill", genderPillowColor);
+    var circleLocation = data.too_skinny === "yes" ? "40" : "70";
+    var circleColor = data.too_skinny === "yes" ? "red" : "green";
+    svg.append("circle")
+        .attr("cx", 350)
+        .attr("cy", circleLocation) 
+        .attr("r", 15) 
+        .style("fill", circleColor);
+
+        var maxDays = 30;
+
+    var angle = (data.duration / maxDays) * 360;
+
+    // Calculate the position of the clock hand
+    var centerX = 250; 
+    var centerY = 50; 
+    var radius = 30; 
+    var clockHandX = centerX + radius * Math.cos((angle - 90) * Math.PI / 180);
+    var clockHandY = centerY + radius * Math.sin((angle - 90) * Math.PI / 180);
+
+    svg.selectAll(".clock").remove(); 
+    svg.append("ellipse")
+        .attr("class", "clock")
+        .attr("cx", centerX)
+        .attr("cy", centerY)
+        .attr("rx", radius)
+        .attr("ry", radius)
+        .attr("fill", "none") 
+        .attr("stroke", "black") 
+        .attr("stroke-width", 2); 
+ 
+    var svg = d3.select("#details-container").select("svg");
+    svg.selectAll(".clock-hand").remove(); 
+    svg.append("circle")
+        .attr("class", "clock-hand")
+        .attr("cx", clockHandX)
+        .attr("cy", clockHandY)
+        .attr("r", 5) 
+        .attr("fill", "red"); 
+        var svg = d3.select("#details-container").select("svg");
+
+        svg.append("rect")
+        .attr("width", 2)
+        .attr("height", 12)
+        .attr("x", 250)
+        .attr("y", 24)
+        .attr("fill", "black");
+
+        svg.append("rect")
+    .attr("width", 60)
+    .attr("height", 30)
+    .attr("x", 120)
+    .attr("y", 54)
+    .attr("fill", "white") 
+    .attr("stroke", "black")
+    .attr("stroke-width", 1); 
+        
+
+        svg.append("text")
+    .attr("class", "clock-text")
+    .attr("x", 350) 
+    .attr("y", 18) 
+    .attr("text-anchor", "middle") 
+    .text("Voeding:"); 
+
+    svg.append("text")
+    .attr("class", "clock-text")
+    .attr("x", 150) 
+    .attr("y", 18) 
+    .attr("text-anchor", "middle") 
+    .text("SNAQ:"); 
+
+    var snaqScore = data.snaqscore;
+
+
+    svg.append("text")
+    .attr("class", "clock-text")
+    .attr("x", 150) 
+    .attr("y", 68) 
+    .attr("text-anchor", "middle") 
+    .text(snaqScore); 
+}
+
+
+svg.selectAll(".dot")
+    .on("click", function(event, d) {
+        // Update details container
+        updateDetails(d);
+    });
+    // Create slider for filtering age
+    var ageSlider = d3.sliderHorizontal()
+        .min(0)
+        .max(100)
+        .step(1)
+        .width(width)
+        .default([d3.min(ages), d3.max(ages)])
+        .displayValue(true)
+        .on('onchange', val => {
+            updatePlot();
+        });
+
+    d3.select("#age-slider").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", 50)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + 20 + ")")
+        .call(ageSlider);
+
+    // Create slider for filtering BMI
+    var bmiSlider = d3.sliderHorizontal()
+        .min(10)
+        .max(40)
+        .step(0.5)
+        .width(width)
+        .default([d3.min(bmis), d3.max(bmis)])
+        .displayValue(true)
+        .on('onchange', val => {
+            updatePlot();
+        });
+        var sliderWidth = width + margin.left + margin.right;
+        var sliderHeight = 70;
+    d3.select("#bmi-slider").append("svg")
+        .attr("width", sliderWidth)
+        .attr("height", sliderHeight)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + 20 + ")")
+        .call(bmiSlider);
+
+    // Create slider for filtering SNAQ score
+    var snaqSlider = d3.sliderHorizontal()
+        .min(0)
+        .max(7)
+        .step(0.5)
+        .width(width)
+        .default([d3.min(snaqs), d3.max(snaqs)])
+        .displayValue(true)
+        .on('onchange', val => {
+            updatePlot();
+        });
+
+    d3.select("#snaq-slider").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", sliderHeight)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + 20 + ")")
+        .call(snaqSlider);
+
+    // Update plot function
+    function updatePlot() {
+        var filterAge = ageSlider.value();
+        var filterBMI = bmiSlider.value();
+        var filterSNAQ = snaqSlider.value();
+        var filterGender = d3.select('input[name="gender"]:checked').node().value;
+        var filterSkinny = d3.select('input[name="too-skinny"]:checked').node().value;
+
+        svg.selectAll(".dot")
+            .style("display", function(d) {
+                return (filterGender === "both" || d.gender === filterGender) &&
+                       (filterSkinny === "both" || d.too_skinny === (filterSkinny === "yes" ? "yes" : "no")) &&
+                       d.age >= filterAge[0] && d.age <= filterAge[1] &&
+                       d.bmi >= filterBMI[0] && d.bmi <= filterBMI[1] &&
+                       d.snaqscore >= filterSNAQ[0] && d.snaqscore <= filterSNAQ[1] ? "block" : "none";
+            });
+    }
+
+    // Update plot when radio buttons are changed
+    d3.selectAll('input[name="gender"], input[name="too-skinny"]').on("change", function() {
+        updatePlot();
+    });
+
+    // Parse admission_date to extract month
+    data.forEach(function(d) {
+        d.admission_date = new Date(d.admission_date);
+        d.month = d.admission_date.getMonth() + 1; // Adding 1 because getMonth() returns zero-based month
+    });
+
+    // Group by month and count number of days for each month
+    var daysByMonth = d3.rollup(data, v => d3.sum(v, d => d.stay_dates.length), d => d.month);
+
+    // Group by month and count number of days for skinny patients
+    var skinnyDaysByMonth = d3.rollup(data.filter(d => d.too_skinny === "yes"), v => d3.sum(v, d => d.stay_dates.length), d => d.month);
+
+    // Calculate percentages
+    var percentageData = Array.from(daysByMonth.entries()).map(([month, totalDays]) => ({
+        month: month,
+        percentage: skinnyDaysByMonth.has(month) ? (skinnyDaysByMonth.get(month) / totalDays) * 100 : 0
+    }));
+
+    // Sort percentageData by month
+    percentageData.sort((a, b) => a.month - b.month);
+
+    // Set up SVG dimensions for the bar chart
+    var barMargin = {top: 30, right: 30, bottom: 30, left: 60},
+        barWidth = 600 - barMargin.left - barMargin.right,
+        barHeight = 600 - barMargin.top - barMargin.bottom;
+
+    // Create SVG element for the bar chart
+    var barSvg = d3.select("body").append("svg")
+        .attr("width", barWidth + barMargin.left + barMargin.right)
+        .attr("height", barHeight + barMargin.top + barMargin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + barMargin.left + "," + barMargin.top + ")");
+
+    // Define scales for the bar chart
+    var xScale = d3.scaleBand()
+        .domain(percentageData.map(function(d) { return d.month; }))
+        .range([0, barWidth])
+        .padding(0.1);
+
+    var yScale = d3.scaleLinear()
+        .domain([0, 100])
+        .nice()
+        .range([barHeight, 0]);
+
+    // Add bars to the bar chart
+    barSvg.selectAll(".bar")
+        .data(percentageData)
+        .enter().append("rect")
+        .attr("class", "bar")
+        .attr("x", function(d) { return xScale(d.month); })
+        .attr("width", xScale.bandwidth())
+        .attr("y", function(d) { return yScale(d.percentage); })
+        .attr("height", function(d) { return barHeight - yScale(d.percentage); })
+        .style("fill", "#286B86");
+
+    // Add X axis to the bar chart
+    barSvg.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + barHeight + ")")
+        .call(d3.axisBottom(xScale));
+
+    // Add Y axis to the bar chart
+    barSvg.append("g")
+        .attr("class", "y axis")
+        .call(d3.axisLeft(yScale));
+
+    // Add axis labels to the bar chart
+    barSvg.append("text")
+        .attr("class", "x label")
+        .attr("text-anchor", "middle")
+        .attr("x", barWidth / 2)
+        .attr("y", barHeight + barMargin.bottom)
+        .text("Maand");
+
+    barSvg.append("text")
+        .attr("class", "y label")
+        .attr("text-anchor", "middle")
+        .attr("x", -barHeight / 2)
+        .attr("y", -barMargin.left)
+        .attr("dy", ".75em")
+        .attr("transform", "rotate(-90)")
+        .text("% Ondergwicht op afdeling per maand in dagen");
+
+});
+
+
+</script>
+
+</body>
+</html>
+
